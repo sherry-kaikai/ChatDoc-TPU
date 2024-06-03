@@ -8,11 +8,21 @@ import logging
 sys.path.append(".")
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 
+'''
+@st.cache_resource 是 Streamlit 提供的一个装饰器，
+用于缓存返回全局资源（如数据库连接、机器学习模型等）的函数。
+这些缓存的对象可以在所有用户、会话和重新运行中全局可用。
+这个装饰器特别适合于那些本质上不可序列化的类型，例如数据库连接、文件句柄或线程等，但也可以用于可序列化的对象。
+缓存的对象必须是线程安全的，因为它们可能会被多个线程同时访问。如果线程安全成为问题，可以考虑使用 st.session_state 来存储每个会话的资源。
+
+@st.cache缓存函数输出，提高程序性能。当相同的输入再次调用该函数时，Streamlit 会返回缓存的输出而不是重新计算，这可以节省宝贵的时间。
+'''
 @st.cache_resource
 def load_model():
+    # 创建唯一实例（单实例模式）
     return DocChatbot.get_instance()
 
-
+# 单实例 
 chatbot_st = load_model()
 
 # TODO: use glm2 format and hard code now, new to opt
@@ -43,6 +53,7 @@ def cut_history(u_input):
     return history
 
 
+# 侧边栏
 with st.sidebar:
     st.title("💬 ChatDoc-TPU")
     st.write("上传一个文档，然后与我对话.")
@@ -161,42 +172,63 @@ with st.sidebar:
 if 'messages' in st.session_state:
     for msg in st.session_state.messages:
         st.chat_message(msg["role"]).write(msg["content"])
-
+# 获取用户输入
 if user_input := st.chat_input():
     # import pdb;pdb.set_trace()
+    # 检查是否已经有文件被上传
     if 'files' not in st.session_state:
+        # 获取历史对话
         his = cut_history(user_input)
+        # 检查是否已经有消息记录
         if 'messages' not in st.session_state:
+            # 初始化消息记录
             st.session_state["messages"] = [{"role": "user", "content": user_input}]
         else:
+            # 添加新的用户消息到消息记录
             st.session_state["messages"].append({"role": "user", "content": user_input})
+        # 显示用户消息
         st.chat_message("user").write(user_input)
+        # 创建助手消息容器
         with st.chat_message("assistant"):
+            # 创建一个空的容器用于显示答案
             answer_container = st.empty()
+            # 生成答案并显示
             for result_answer, _ in chatbot_st.llm.stream_predict(user_input, his):
                 answer_container.markdown(result_answer)
+        # 添加助手的回答到消息记录
         st.session_state["messages"].append({"role": "assistant", "content": result_answer})
     else:
+        # 添加用户输入到消息记录
         st.session_state["messages"].append({"role": "user", "content": user_input})
+        # 显示用户消息
         st.chat_message("user").write(user_input)
+        # 创建助手消息容器
         with st.chat_message("assistant"):
+            # 创建一个空的容器用于显示答案
             answer_container = st.empty()
+            # 记录查询开始时间
             start_time = time.time()
+            # 查询文档
             docs = chatbot_st.query_from_doc(user_input, 3)
+            # 记录查询所用时间
             logging.info("Total quire time {}".format(time.time()- start_time))
+            # 准备参考文档内容
             refer = "\n".join([x.page_content.replace("\n", '\t') for x in docs])
+            # 准备提示信息
             PROMPT = """{}。\n请根据下面的参考文档回答上述问题。\n{}\n"""
             prompt = PROMPT.format(user_input, refer)
-
+            # 生成答案并显示
             for result_answer, _ in chatbot_st.llm.stream_predict(prompt, []):
                 answer_container.markdown(result_answer)
-
+            # 展示参考文档
             with st.expander("References"):
                 for i, doc in enumerate(docs):
+                    # 获取文档来源和页码
                     source_str = os.path.basename(doc.metadata["source"]) if "source" in doc.metadata else ""
                     page_str = doc.metadata['page'] + 1 if "page" in doc.metadata else ""
+                    # 显示参考文档
                     st.write(f"""### Reference [{i + 1}] {source_str} P{page_str}""")
                     st.write(doc.page_content)
                     i += 1
-
+        # 添加助手的回答到消息记录
         st.session_state["messages"].append({"role": "assistant", "content": result_answer})

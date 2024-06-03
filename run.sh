@@ -56,7 +56,8 @@ parse_args "$@"
 
 
 # nltk_data & bert_model is required
-if [ ! -d "$HOME/nltk_data" ]; then
+# nltk 自然语言处理工具包：分词、切词、规范化、词性标注等
+if [ ! -d "$HOME/nltk_data" ]; then 
     echo "$HOME/nltk_dat does not exist, download..."
     python3 -m dfss --url=open@sophgo.com:ezoo/chatdoc/nltk_data.zip
     unzip nltk_data.zip
@@ -110,6 +111,7 @@ export DEVICE_ID=$dev_id
 
 if [ "$server_port" == "" ]; then
     # auto server port
+    # 创建交互式web应用
     streamlit run web_demo_st.py --server.address $server_address
 else
     streamlit run web_demo_st.py --server.address $server_address --server.port $server_port

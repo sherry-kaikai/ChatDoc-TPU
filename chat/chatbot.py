@@ -139,6 +139,7 @@ class DocChatbot:
             file.write(self.files)
 
     def del_vector_db(self, file_name):
+        # 递归删除一个目录和目录内所有内容
         shutil.rmtree(f"{self.db_base_path}/" + file_name)
         self.vector_db = None
 
